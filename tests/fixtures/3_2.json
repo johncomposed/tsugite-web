@@ -1,0 +1,173 @@
+{
+ "file": "../tsugite-original/3_2.tsu",
+ "sax": 2,
+ "dim": 3,
+ "ang": 0.0,
+ "fss": "2,0:0,0:1,1",
+ "hfs": [
+  [
+   [
+    0,
+    2,
+    0
+   ],
+   [
+    0,
+    3,
+    0
+   ],
+   [
+    0,
+    0,
+    0
+   ]
+  ],
+  [
+   [
+    2,
+    2,
+    1
+   ],
+   [
+    2,
+    3,
+    1
+   ],
+   [
+    2,
+    1,
+    1
+   ]
+  ]
+ ],
+ "voxel_matrix": [
+  [
+   [
+    1,
+    1,
+    2
+   ],
+   [
+    0,
+    0,
+    2
+   ],
+   [
+    1,
+    2,
+    2
+   ]
+  ],
+  [
+   [
+    1,
+    1,
+    2
+   ],
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    1,
+    2,
+    2
+   ]
+  ],
+  [
+   [
+    1,
+    1,
+    2
+   ],
+   [
+    1,
+    2,
+    2
+   ],
+   [
+    1,
+    2,
+    2
+   ]
+  ]
+ ],
+ "valid": true,
+ "connected": [
+  true,
+  true,
+  true
+ ],
+ "bridged": [
+  true,
+  true,
+  true
+ ],
+ "checker": [
+  false,
+  false,
+  false
+ ],
+ "checker_vertices": [
+  [],
+  [],
+  []
+ ],
+ "interlock": true,
+ "interlocks": [
+  true,
+  true,
+  true
+ ],
+ "slides": [
+  [
+   [
+    2,
+    0
+   ]
+  ],
+  [],
+  [
+   [
+    2,
+    1
+   ]
+  ]
+ ],
+ "number_of_slides": [
+  1,
+  0,
+  1
+ ],
+ "friction_nums": [
+  14,
+  -1,
+  25
+ ],
+ "contact_nums": [
+  25,
+  -1,
+  41
+ ],
+ "breakable": [
+  false,
+  false,
+  false
+ ],
+ "breakable_voxel_inds": [
+  [],
+  [],
+  []
+ ],
+ "fab_direction_ok": [
+  true,
+  true,
+  true
+ ],
+ "fab_directions": [
+  0,
+  0,
+  1
+ ]
+}

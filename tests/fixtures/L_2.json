@@ -1,0 +1,143 @@
+{
+ "file": "../tsugite-original/L_2.tsu",
+ "sax": 2,
+ "dim": 3,
+ "ang": 0.0,
+ "fss": "2,0:0,1",
+ "hfs": [
+  [
+   [
+    2,
+    2,
+    2
+   ],
+   [
+    1,
+    3,
+    1
+   ],
+   [
+    0,
+    1,
+    0
+   ]
+  ]
+ ],
+ "voxel_matrix": [
+  [
+   [
+    0,
+    0,
+    1
+   ],
+   [
+    0,
+    0,
+    1
+   ],
+   [
+    0,
+    0,
+    1
+   ]
+  ],
+  [
+   [
+    0,
+    1,
+    1
+   ],
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    1,
+    1
+   ]
+  ],
+  [
+   [
+    1,
+    1,
+    1
+   ],
+   [
+    0,
+    1,
+    1
+   ],
+   [
+    1,
+    1,
+    1
+   ]
+  ]
+ ],
+ "valid": true,
+ "connected": [
+  true,
+  true
+ ],
+ "bridged": [
+  true,
+  true
+ ],
+ "checker": [
+  false,
+  false
+ ],
+ "checker_vertices": [
+  [],
+  []
+ ],
+ "interlock": true,
+ "interlocks": [
+  true,
+  true
+ ],
+ "slides": [
+  [
+   [
+    2,
+    0
+   ]
+  ],
+  [
+   [
+    2,
+    1
+   ]
+  ]
+ ],
+ "number_of_slides": [
+  1,
+  1
+ ],
+ "friction_nums": [
+  25,
+  37
+ ],
+ "contact_nums": [
+  41,
+  51
+ ],
+ "breakable": [
+  false,
+  false
+ ],
+ "breakable_voxel_inds": [
+  [],
+  []
+ ],
+ "fab_direction_ok": [
+  true,
+  true
+ ],
+ "fab_directions": [
+  0,
+  1
+ ]
+}

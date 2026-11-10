@@ -1,157 +1,213 @@
 /**
- * Core voxel model ported from the original Tsugite (UIST 2020).
- *
- * The joint lives in a dim x dim x dim integer grid. Each voxel holds a
- * label: 0 = empty, 1 = part A, 2 = part B. Geometry is edited through
- * height fields along an axis ("push and pull on faces"), as in
- * Geometries.mat_from_fields in the Python codebase.
+ * Root joint aggregate — port of the state/parameter parts of Types.py.
+ * Rendering (vertex/index building) lives in src/view; fabrication in src/fab.
  */
+import {
+  FixedSide,
+  defaultFixedSides,
+  rotationAllowed,
+  unblockedPositions,
+} from './fixedSides';
+import { Evaluation } from './evaluation';
+import {
+  clearHeightFields,
+  editHeightFields,
+  matFromFields,
+  randomHeightFields,
+} from './heightFields';
+import type { Axis, Mat2, Mat3, Vec3 } from './types';
 
-export type VoxelLabel = 0 | 1 | 2;
-export const EMPTY: VoxelLabel = 0;
-export const PART_A: VoxelLabel = 1;
-export const PART_B: VoxelLabel = 2;
+export interface FabSettings {
+  realDia: number; // milling bit diameter (mm)
+  tol: number; // tolerance (mm)
+  speed: number; // feed rate
+  spindleSpeed: number;
+  ext: 'gcode' | 'nc' | 'sbp';
+  alignAx: number; // 0..5: axis*2+dir to align timber with during fabrication
+  interp: boolean; // true arcs (G2/G3) vs interpolated points
+}
 
-export type Axis = 0 | 1 | 2; // x, y, z
+export interface JointOptions {
+  sax?: Axis;
+  dim?: number;
+  ang?: number;
+  realTimDims?: Vec3;
+  fixedSides?: FixedSide[][];
+  heightFields?: Mat2[];
+  incremental?: boolean;
+  fab?: Partial<FabSettings>;
+}
 
-export interface Joint {
+export const COMPONENT_SIZE = 0.275;
+
+export const DEFAULT_FAB: FabSettings = {
+  realDia: 6.0,
+  tol: 0.15,
+  speed: 400,
+  spindleSpeed: 6000,
+  ext: 'gcode',
+  alignAx: 0,
+  interp: true,
+};
+
+export class Joint {
+  sax: Axis;
   dim: number;
-  /** Voxel labels in row-major [z][y][x] order (flat index helper below). */
-  voxels: Uint8Array;
-  /** Number of components (2 for a standard A/B joint). */
-  components: 2 | 3;
-}
+  ang: number;
+  realTimDims: Vec3;
+  fixedSides: FixedSide[][];
+  heightFields: Mat2[];
+  incremental: boolean;
+  fab: FabSettings;
 
-export function voxelIndex(dim: number, x: number, y: number, z: number): number {
-  return x + dim * (y + dim * z);
-}
+  // Derived state
+  voxelMatrix!: Mat3;
+  eval!: Evaluation;
+  fabDirections!: number[];
 
-export function createJoint(dim: number, components: 2 | 3 = 2): Joint {
-  return { dim, voxels: new Uint8Array(dim * dim * dim), components };
-}
-
-/** Default joint: two interlocking halves split along the y axis. */
-export function createDefaultJoint(dim = 24): Joint {
-  const joint = createJoint(dim, 2);
-  // Part A occupies y < dim/2, part B occupies y >= dim/2, like the
-  // original "Untitled" joint before any push/pull edits.
-  for (const [x, y, z] of eachVoxel(dim)) {
-    const label = y < dim / 2 ? PART_A : PART_B;
-    joint.voxels[voxelIndex(dim, x, y, z)] = label;
+  constructor(options: JointOptions = {}) {
+    this.sax = options.sax ?? 2;
+    this.dim = options.dim ?? 3;
+    this.ang = options.ang ?? 0.0;
+    this.realTimDims = options.realTimDims ?? [44.0, 44.0, 44.0];
+    this.fixedSides = options.fixedSides ?? defaultFixedSides();
+    this.incremental = options.incremental ?? false;
+    this.fab = { ...DEFAULT_FAB, ...options.fab };
+    this.heightFields =
+      options.heightFields && options.heightFields.length > 0
+        ? options.heightFields
+        : randomHeightFields(this.dim, this.noc);
+    this.recompute();
   }
-  return joint;
-}
 
-export function* eachVoxel(dim: number): Generator<[number, number, number]> {
-  for (let z = 0; z < dim; z++)
-    for (let y = 0; y < dim; y++)
-      for (let x = 0; x < dim; x++) yield [x, y, z];
-}
-
-/**
- * Height fields describing the material boundaries along `axis`, one per
- * component boundary (components - 1 fields). Entry [u][v] is the number of
- * voxels along the axis belonging to earlier components. Port of
- * mat_from_fields: voxel k along the axis gets label n where n is the first
- * height field with k < hf[u][v], else components - 1... adjusted so that
- * label 0 is empty: heights of 0 mean the component is absent there.
- */
-export type HeightField = number[][];
-
-export function heightFieldsFromJoint(joint: Joint, axis: Axis): HeightField[] {
-  const { dim, components } = joint;
-  const fields: HeightField[] = [];
-  for (let c = 0; c < components - 1; c++) {
-    fields.push(
-      Array.from({ length: dim }, () => Array<number>(dim).fill(0)),
-    );
+  get noc(): number {
+    return this.fixedSides.length;
   }
-  for (let u = 0; u < dim; u++) {
-    for (let v = 0; v < dim; v++) {
-      let c = 0;
-      let run = 0;
-      for (let k = 0; k <= dim; k++) {
-        const label = k < dim ? labelAt(joint, axis, u, v, k) : 0;
-        const current: VoxelLabel = c >= components - 1 ? EMPTY : ((c + 1) as VoxelLabel);
-        if (label === current) {
-          run++;
-          continue;
-        }
-        while (c < components - 1 && label !== ((c + 1) as VoxelLabel)) {
-          setField(fields[c], axis, u, v, run);
-          c++;
-          run = 0;
-        }
-        run = label === ((c + 1) as VoxelLabel) ? 1 : 0;
+
+  /** avg timber dim (mm) per model unit. */
+  get ratio(): number {
+    const avg = (this.realTimDims[0] + this.realTimDims[1] + this.realTimDims[2]) / 3;
+    return avg / COMPONENT_SIZE;
+  }
+
+  get voxelSizes(): Vec3 {
+    const r = this.ratio * this.dim;
+    return [this.realTimDims[0] / r, this.realTimDims[1] / r, this.realTimDims[2] / r];
+  }
+
+  get componentLength(): number {
+    return 0.5 * COMPONENT_SIZE;
+  }
+
+  /** Effective milling radius/diameter/tolerance in model units. */
+  get vdia(): number {
+    return this.effDia / this.ratio;
+  }
+  get vrad(): number {
+    return this.effRad / this.ratio;
+  }
+  get vtol(): number {
+    return this.fab.tol / this.ratio;
+  }
+  get effRad(): number {
+    return 0.5 * this.fab.realDia - this.fab.tol;
+  }
+  get effDia(): number {
+    return 2 * this.effRad;
+  }
+
+  get rotAllowed(): boolean {
+    return rotationAllowed(this.fixedSides, this.sax);
+  }
+
+  get unblocked(): FixedSide[] {
+    return unblockedPositions(this.fixedSides);
+  }
+
+  recompute(): void {
+    this.voxelMatrix = matFromFields(this.heightFields, this.sax);
+    this.eval = new Evaluation(this.voxelMatrix, {
+      fixedSides: this.fixedSides,
+      sax: this.sax,
+      noc: this.noc,
+      dim: this.dim,
+    });
+    this.fabDirections = this.eval.fabDirections;
+  }
+
+  /** Port of Types.update_sliding_direction. */
+  updateSlidingDirection(sax: Axis): { ok: boolean; msg: string } {
+    for (let i = 0; i < this.fixedSides.length; i++) {
+      for (const side of this.fixedSides[i]) {
+        if (side.ax !== sax) continue;
+        if (side.dir === 0 && i === 0) continue;
+        if (side.dir === 1 && i === this.noc - 1) continue;
+        return { ok: false, msg: 'This sliding direction is blocked' };
       }
     }
+    this.sax = sax;
+    this.recompute();
+    return { ok: true, msg: '' };
   }
-  return fields;
-}
 
-export function jointFromHeightFields(
-  dim: number,
-  axis: Axis,
-  fields: HeightField[],
-): Joint {
-  const joint = createJoint(dim, (fields.length + 1) as 2 | 3);
-  for (let u = 0; u < dim; u++) {
-    for (let v = 0; v < dim; v++) {
-      for (let k = 0; k < dim; k++) {
-        let label: VoxelLabel = EMPTY;
-        // Mirrors the Python: first field with k < hf wins; otherwise the
-        // last component label.
-        let assigned = false;
-        for (let n = 0; n < fields.length; n++) {
-          if (k < getField(fields[n], axis, u, v)) {
-            label = (n + 1) as VoxelLabel;
-            assigned = true;
-            break;
-          }
-        }
-        if (!assigned) label = fields.length as VoxelLabel;
-        // Zero-height runs encode empty space before that field.
-        for (let n = 0; n < fields.length; n++) {
-          if (getField(fields[n], axis, u, v) === 0 && label === (n + 1)) label = EMPTY;
-        }
-        setLabelAt(joint, axis, u, v, k, label);
+  updateDimension(dim: number): void {
+    this.dim = dim;
+    this.heightFields = randomHeightFields(this.dim, this.noc);
+    this.recompute();
+  }
+
+  updateAngle(ang: number): void {
+    this.ang = ang;
+  }
+
+  updateTimberDims(inds: number[], val: number): void {
+    for (const i of inds) this.realTimDims[i] = val;
+  }
+
+  /** Port of Types.update_number_of_components. */
+  updateNumberOfComponents(newNoc: number, rand: () => number = Math.random): void {
+    if (newNoc === this.noc) return;
+    if (newNoc > this.noc) {
+      const unblocked = this.unblocked;
+      if (unblocked.length < newNoc - this.noc) return;
+      for (let i = 0; i < newNoc - this.noc; i++) {
+        const avail = this.unblocked;
+        const randomSide = avail[Math.floor(rand() * avail.length)];
+        const lastAligned = this.fixedSides[this.fixedSides.length - 1][0].ax === this.sax;
+        if (lastAligned) this.fixedSides.splice(this.fixedSides.length - 1, 0, [randomSide]);
+        else this.fixedSides.push([randomSide]);
       }
     }
+    if (newNoc < this.noc) {
+      for (let i = this.noc - newNoc; i > 0; i--) this.fixedSides.pop();
+    }
+    this.heightFields = randomHeightFields(this.dim, this.noc);
+    this.recompute();
   }
-  return joint;
-}
 
-function labelAt(joint: Joint, axis: Axis, u: number, v: number, k: number): VoxelLabel {
-  const [x, y, z] = coords(axis, u, v, k, joint.dim);
-  return joint.voxels[voxelIndex(joint.dim, x, y, z)] as VoxelLabel;
-}
+  /** Port of Types.update_component_position. */
+  updateComponentPosition(newSides: FixedSide[], n: number): void {
+    this.fixedSides[n] = newSides;
+    this.recompute();
+  }
 
-function setLabelAt(
-  joint: Joint,
-  axis: Axis,
-  u: number,
-  v: number,
-  k: number,
-  label: VoxelLabel,
-): void {
-  const [x, y, z] = coords(axis, u, v, k, joint.dim);
-  joint.voxels[voxelIndex(joint.dim, x, y, z)] = label;
-}
+  editHeightFields(
+    faces: readonly (readonly [number, number])[],
+    h: number,
+    n: number,
+    dir: number,
+  ): void {
+    editHeightFields(this.heightFields, faces, h, n, dir, this.noc);
+    this.recompute();
+  }
 
-/** Map (u, v, k) on an arbitrary axis to (x, y, z), like Python's ind3d.insert. */
-function coords(axis: Axis, u: number, v: number, k: number, dim: number): [number, number, number] {
-  const ind: number[] = [u, v];
-  ind.splice(axis, 0, k);
-  if (ind.length !== 3 || ind.some((n) => n < 0 || n >= dim)) throw new RangeError('bad coords');
-  return ind as [number, number, number];
-}
+  randomize(): void {
+    this.heightFields = randomHeightFields(this.dim, this.noc);
+    this.recompute();
+  }
 
-function getField(field: HeightField, axis: Axis, u: number, v: number): number {
-  void axis;
-  return field[u]?.[v] ?? 0;
-}
-
-function setField(field: HeightField, axis: Axis, u: number, v: number, value: number): void {
-  void axis;
-  field[u][v] = value;
+  clear(): void {
+    this.heightFields = clearHeightFields(this.dim, this.noc);
+    this.recompute();
+  }
 }
