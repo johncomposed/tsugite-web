@@ -7,6 +7,9 @@ import { fixedSidesToString } from './model/fixedSides';
 import type { Mat2, Vec3 } from './model/types';
 import { SuggestionPanel } from './ui/suggestionPanel';
 import type { SuggestionResponse } from './workers/suggestionWorker';
+import { buildMillContext, millingPathVertices } from './fab/millingPath';
+import { exportGcode } from './fab/gcode';
+import type { MillVertex } from './fab/millVertex';
 import { JointRenderer } from './view/jointRender';
 import { OverlayManager } from './view/overlays';
 import { PickingPass } from './view/picking';
@@ -85,12 +88,39 @@ function updateSuggestions(): void {
   });
 }
 
+function computeMillingPaths(): { display: Float32Array[]; mill: MillVertex[][] } {
+  const ctx = buildMillContext(joint, jointRenderer.jvertsByAxis[0]);
+  const display: Float32Array[] = [];
+  const mill: MillVertex[][] = [];
+  for (let n = 0; n < joint.noc; n++) {
+    const { displayPoints, millVertices } = millingPathVertices(ctx, n);
+    display.push(displayPoints);
+    mill.push(millVertices);
+  }
+  return { display, mill };
+}
+
 function refresh(): void {
   jointRenderer.rebuild(joint, view);
   pickPass.build(joint, jointRenderer.componentGroups, jointRenderer.jvertsByAxis);
+  if (view.showMillingPath) {
+    jointRenderer.addMillingPaths(joint, computeMillingPaths().display);
+  }
   updateSuggestions();
 }
 refresh();
+
+function downloadExports(): void {
+  const { mill } = computeMillingPaths();
+  for (const file of exportGcode(joint, mill, 'joint')) {
+    const blob = new Blob([file.content], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = file.name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+}
 
 // Screen projection helpers for Selection (model rotation → screen plane)
 const projEuler = new THREE.Euler(0, 0, 0, 'XYZ');
@@ -203,6 +233,13 @@ window.addEventListener('keydown', (e) => {
     case 'f':
       view.showFeedback = !view.showFeedback;
       refresh();
+      return;
+    case 'm':
+      view.showMillingPath = !view.showMillingPath;
+      refresh();
+      return;
+    case 'g':
+      downloadExports();
       return;
   }
 });

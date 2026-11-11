@@ -372,6 +372,21 @@ export class JointRenderer {
     }
   }
 
+  /** Milling path polylines (Show.milling_paths): colored line strip per component. */
+  addMillingPaths(joint: Joint, displayPoints: Float32Array[]): void {
+    const cols = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x00ffff, 0xff00ff];
+    for (let n = 0; n < joint.noc; n++) {
+      if (!joint.eval.fabDirectionOk[n]) continue;
+      const pts = displayPoints[n];
+      if (!pts || pts.length < 6) continue;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: cols[n % 6] }));
+      line.renderOrder = 5;
+      this.componentGroups[n].add(line);
+    }
+  }
+
   /** Per-frame: rotation, open translation, visibility. */
   updateTransforms(joint: Joint, view: ViewSettings): void {
     view.updateOpenRatio(joint.noc);

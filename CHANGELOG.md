@@ -1,5 +1,45 @@
 # Changelog
 
+## Phase 6 — Fabrication (2026-11-10)
+
+Milling path generation and G-code/SBP/NC export with parity against the
+original's shipped machine files.
+
+### Added
+- `src/fab/millVertex.ts` — `MillVertex` (arcs, traversal flag,
+  `scaleAndSwap` to machine coordinates, z-rotation for axis alignment),
+  `RoughPixel`, `connectedArc`, `arcPoints`, Python-style number formatting.
+- `src/fab/millingPath.ts` — full port of the layer pipeline from Types.py:
+  `layer_mat_from_cube` → fixed-side padding (with corner fix) → region
+  detection (`get_diff_neighbors`) → rough milling lanes → region outline
+  vertices (with the original's pad-offset quirks preserved) → vertex
+  ordering (`set_starting_vert`, `get_sublist_of_ordered_verts` with
+  closed-loop detection) → offsetting with rounded inner-corner arcs and
+  corner artifacts → layered z-stepping (`get_layered_vertices`, incremental
+  mode, segment proportions) → per-component end points. Oblique-joint edge
+  paths included.
+- `src/fab/gcode.ts` — port of `export_gcode`: G-code/.nc (G0/G1/G2/G3 with
+  R arcs or interpolated points) and ShopBot .sbp (J3/M3/CG) writers,
+  component axis-alignment rotation, per-component A/B/… files.
+  Coordinate-omission uses an epsilon compare (1e-9): JS and CPython libm
+  differ by 1 ulp in cos(π/4), which flipped the original's exact-equality
+  behavior.
+- Viewer: `m` toggles colored milling-path polylines per component (skipped
+  for unfabricatable components, as the original); `g` downloads the
+  exported files via Blob.
+- Norms in fab code use sqrt-of-squares (not `Math.hypot`) to match numpy
+  bit-for-bit.
+
+### Verified
+`tests/gcode.test.ts`: full-file comparison against the original's exports —
+`my_joint.tsu` → `my_joint_A/B.gcode` and `20241028_test_joint.tsu` →
+`20241028_test_joint_A/B.sbp` (T-shaped component, rotated axis alignment,
+sax=1). Line-for-line structural equality; numbers within 2e-3 (the shipped
+files were written with 3 decimals; we write 5 like the current original).
+144 tests green. Milling path display visually verified.
+
+
+
 ## Phase 5 — Suggestions panel (2026-11-10)
 
 ### Added

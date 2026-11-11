@@ -11,7 +11,8 @@ import type { Axis, Vec3 } from '../model/types';
 export const VERTEX_STRIDE = 8;
 
 export function normalize(v: Vec3): Vec3 {
-  const norm = Math.hypot(v[0], v[1], v[2]);
+  // sqrt of sum of squares (not Math.hypot) to match numpy bit-for-bit
+  const norm = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
   if (norm === 0) return v;
   return [v[0] / norm, v[1] / norm, v[2] / norm];
 }
