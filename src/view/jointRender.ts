@@ -8,11 +8,13 @@ import * as THREE from 'three';
 import type { Joint } from '../model/joint';
 import { COMPONENT_SIZE } from '../model/joint';
 import {
+  arrowIndices,
+  chessLineIndices,
   jointFaceIndices,
   jointLineIndices,
   openLineIndices,
 } from './meshBuilder';
-import { createJointVertices, VERTEX_STRIDE } from './vertexGrid';
+import { arrowVertices, createJointVertices, getPosVecs, VERTEX_STRIDE } from './vertexGrid';
 import type { ViewSettings } from './viewSettings';
 import type { Axis } from '../model/types';
 
@@ -77,6 +79,13 @@ export function lineGeometry(verts: Float32Array, lineIndices: readonly number[]
   return geo;
 }
 
+/** Unbridged part colors per component (ViewSettings.unbridge_colors). */
+const UNBRIDGE_COLORS: [number, number][] = [
+  [0xffff99, 0x99ffff],
+  [0xff99ff, 0xffcc99],
+  [0xccccff, 0xf2f2f2],
+];
+
 function disposeGroup(group: THREE.Group): void {
   group.traverse((obj) => {
     if (obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments) {
@@ -100,6 +109,14 @@ export class JointRenderer {
   private readonly warnLineMaterial: THREE.LineBasicMaterial;
   private readonly hiddenLineMaterial: THREE.LineDashedMaterial;
   private readonly openLineMaterial: THREE.LineDashedMaterial;
+  private readonly unconnectedMaterial: THREE.MeshBasicMaterial;
+  private readonly breakableMaterial: THREE.MeshBasicMaterial;
+  private readonly unfabricatableMaterial: THREE.MeshBasicMaterial;
+  private readonly chessLineMaterial: THREE.LineBasicMaterial;
+  private readonly arrowMaterial: THREE.LineBasicMaterial;
+  private readonly arrowWarnMaterial: THREE.LineBasicMaterial;
+  private readonly arrowFaceMaterial: THREE.MeshBasicMaterial;
+  private readonly arrowFaceWarnMaterial: THREE.MeshBasicMaterial;
 
   constructor(endGrainTexture: THREE.Texture | null) {
     this.faceMaterial = new THREE.MeshBasicMaterial({
@@ -132,6 +149,38 @@ export class JointRenderer {
       color: 0x000000,
       dashSize: 0.02,
       gapSize: 0.02,
+    });
+    const faceOpts = {
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
+    } as const;
+    this.unconnectedMaterial = new THREE.MeshBasicMaterial({ color: 0xff3300, ...faceOpts });
+    this.breakableMaterial = new THREE.MeshBasicMaterial({ color: 0xffff66, ...faceOpts });
+    this.unfabricatableMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffcc80,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    // The original clears the depth buffer before chess lines and arrows
+    // (draw_geometries defaults) — they always render on top.
+    this.chessLineMaterial = new THREE.LineBasicMaterial({ color: 0xff3300, depthTest: false });
+    this.arrowMaterial = new THREE.LineBasicMaterial({ color: 0x000000, depthTest: false });
+    this.arrowWarnMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, depthTest: false });
+    this.arrowFaceMaterial = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      side: THREE.DoubleSide,
+      depthTest: false,
+    });
+    this.arrowFaceWarnMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff0000,
+      side: THREE.DoubleSide,
+      depthTest: false,
     });
   }
 
@@ -166,6 +215,7 @@ export class JointRenderer {
       endsMesh.renderOrder = 0;
       group.add(endsMesh);
 
+      // Unconnected voxels: red-orange with feedback on, neutral otherwise
       if (!ev.connected[n] && ev.voxelMatrixUnconnected) {
         const unconSets = jointFaceIndices(
           ev.voxelMatrixUnconnected,
@@ -176,10 +226,12 @@ export class JointRenderer {
         );
         const unconMesh = new THREE.Mesh(
           quadGeometry(verts, unconSets.notEnds.concat(unconSets.ends)),
-          this.faceMaterial,
+          view.showFeedback ? this.unconnectedMaterial : this.faceMaterial,
         );
         group.add(unconMesh);
       }
+
+      if (view.showFeedback) this.buildFeedback(joint, n, group, verts);
 
       // Visible lines (red if feedback shows a non-interlocking component)
       const lineInds = jointLineIndices(joint.voxelMatrix, joint.fixedSides, n, joint.dim);
@@ -217,6 +269,106 @@ export class JointRenderer {
 
       this.componentGroups.push(group);
       this.root.add(group);
+    }
+  }
+
+  /** Feedback overlays — ports of Show.unbridged/nondurable/unfabricatable/checker/arrows. */
+  private buildFeedback(joint: Joint, n: number, group: THREE.Group, verts: Float32Array): void {
+    const ev = joint.eval;
+
+    // Unbridged halves in pastel color pairs (Show.unbridged)
+    const unbridgedMats = ev.voxelMatricesUnbridged[n];
+    if (!ev.bridged[n] && unbridgedMats) {
+      const colors = UNBRIDGE_COLORS[n % UNBRIDGE_COLORS.length];
+      for (let m = 0; m < 2; m++) {
+        const sets = jointFaceIndices(
+          unbridgedMats[m],
+          [joint.fixedSides[n][m]],
+          n,
+          joint.dim,
+          joint.fixedSides[n],
+        );
+        const mat = new THREE.MeshBasicMaterial({
+          color: colors[m],
+          side: THREE.DoubleSide,
+          polygonOffset: true,
+          polygonOffsetFactor: 0,
+          polygonOffsetUnits: 0,
+        });
+        group.add(new THREE.Mesh(quadGeometry(verts, sets.notEnds.concat(sets.ends)), mat));
+      }
+    }
+
+    // Breakable voxels in yellow (Show.nondurable)
+    if (ev.breakable[n]) {
+      const sets = jointFaceIndices(ev.breakableVoxmat, [], n, joint.dim, joint.fixedSides[n]);
+      const mesh = new THREE.Mesh(
+        quadGeometry(verts, sets.notEnds.concat(sets.ends)),
+        this.breakableMaterial,
+      );
+      mesh.renderOrder = 1;
+      group.add(mesh);
+    }
+
+    // Unfabricatable component tinted orange (Show.unfabricatable)
+    if (!ev.fabDirectionOk[n]) {
+      const sets = jointFaceIndices(
+        ev.voxelMatrixConnected,
+        joint.fixedSides[n],
+        n,
+        joint.dim,
+        joint.fixedSides[n],
+      );
+      const mesh = new THREE.Mesh(
+        quadGeometry(verts, sets.notEnds.concat(sets.ends)),
+        this.unfabricatableMaterial,
+      );
+      mesh.renderOrder = 2;
+      group.add(mesh);
+    }
+
+    // Chessboard warning lines (Show.checker)
+    if (ev.checker[n]) {
+      const inds = chessLineIndices(ev.checkerVertices[n], joint.sax, joint.dim);
+      const lines = new THREE.LineSegments(lineGeometry(verts, inds), this.chessLineMaterial);
+      lines.renderOrder = 10;
+      group.add(lines);
+    }
+
+    // Sliding direction arrows (Show.arrows)
+    const slides = ev.slides[n];
+    if (slides.length > 0) {
+      const av = arrowVertices(joint);
+      const { lines, faces } = arrowIndices(slides);
+      const warn = !ev.interlocks[n];
+      const posVecs = getPosVecs(joint);
+      const d =
+        joint.fixedSides[n].length === 2 ? 1.55 * COMPONENT_SIZE : 2.55 * COMPONENT_SIZE;
+      for (const side of joint.fixedSides[n]) {
+        const u = posVecs[side.ax];
+        const len = Math.hypot(u[0], u[1], u[2]);
+        const t: [number, number, number] = [
+          (d * (2 * side.dir - 1) * u[0]) / len,
+          (d * (2 * side.dir - 1) * u[1]) / len,
+          (d * (2 * side.dir - 1) * u[2]) / len,
+        ];
+        const arrowGroup = new THREE.Group();
+        arrowGroup.position.set(t[0], t[1], t[2]);
+        const lineObj = new THREE.LineSegments(
+          lineGeometry(av, lines),
+          warn ? this.arrowWarnMaterial : this.arrowMaterial,
+        );
+        const triGeo = new THREE.BufferGeometry();
+        triGeo.setAttribute('position', new THREE.BufferAttribute(expandLines(av, faces), 3));
+        const triObj = new THREE.Mesh(
+          triGeo,
+          warn ? this.arrowFaceWarnMaterial : this.arrowFaceMaterial,
+        );
+        lineObj.renderOrder = 10;
+        triObj.renderOrder = 10;
+        arrowGroup.add(lineObj, triObj);
+        group.add(arrowGroup);
+      }
     }
   }
 

@@ -165,6 +165,10 @@ window.addEventListener('keydown', (e) => {
       view.showHiddenLines = !view.showHiddenLines;
       refresh();
       return;
+    case 'f':
+      view.showFeedback = !view.showFeedback;
+      refresh();
+      return;
   }
 });
 window.addEventListener('keyup', (e) => {

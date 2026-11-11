@@ -1,5 +1,30 @@
 # Changelog
 
+## Phase 4 — Evaluation feedback display (2026-11-10)
+
+Visual feedback for every evaluation result, matching Show.py's passes.
+
+### Added (all in `src/view/jointRender.ts`, gated by `showFeedback`)
+- Unconnected voxels: red-orange faces (neutral white when feedback is off).
+- Unbridged components: the two fixed-side parts tinted with the original's
+  pastel color pairs (yellow/turquoise, pink/orange, purple/grey).
+- Breakable (grain-direction) voxels: yellow faces from `breakableVoxmat`.
+- Unfabricatable components: transparent orange tint over all faces.
+- Chessboard warnings: red-orange lines at checker vertices along the
+  sliding axis, depth-cleared like the original (always on top).
+- Sliding-direction arrows per component at each fixed side (ported
+  `arrow_vertices`/`arrow_indices`), black when interlocked, red otherwise,
+  also drawn on top.
+- Red component outlines for non-interlocked components (from Phase 2).
+- `f` key toggles feedback (checkFEED equivalent).
+
+### Verified (live browser automation)
+Chessboard joint (alternating heights): checker=true both components, red
+chess lines visible mid-joint, black sliding arrows at both ends. Island
+joint: unconnected rendering path exercised. Valid joints show plain look.
+
+
+
 ## Phase 3 — Interaction (2026-11-10)
 
 Push/pull face editing, component move/rotate, GPU picking — the editing
