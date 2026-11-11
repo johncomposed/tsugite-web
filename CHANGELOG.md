@@ -15,6 +15,11 @@
   Regenerate.
 - Clicking a thumbnail loads that joint (restoring its sax/dim/fixed sides)
   and closes the gallery. "Gallery" button lives in the Design section.
+- "Open joints" toggle in the gallery bar re-renders the cached thumbnails
+  with components separated along the sliding axis (wider thumb framing);
+  toggling never regenerates results. Thumbnails render against a joint
+  pinned to the generated config, so the toggle stays correct even if the
+  editor setup changed afterwards.
 - `src/ui/thumbRenderer.ts` — shared offscreen thumbnail renderer.
 
 Verified live: generate (20 valid / 59 sampled), pick loads a valid joint,

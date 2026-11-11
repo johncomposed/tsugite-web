@@ -138,6 +138,15 @@ canvas {
   cursor: pointer;
 }
 
+.gallery-open-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #333;
+  cursor: pointer;
+}
+
 .gallery-status {
   font-size: 12px;
   color: #555;
