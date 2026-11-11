@@ -13,6 +13,8 @@ import type { MillVertex } from './fab/millVertex';
 import { ControlPanel } from './ui/controlPanel';
 import { parseTsu, serializeTsu } from './io/tsu';
 import { PerfMonitor } from './perf/perfMonitor';
+import { matFromFields } from './model/heightFields';
+import { Evaluation } from './model/evaluation';
 import { JointRenderer } from './view/jointRender';
 import { OverlayManager } from './view/overlays';
 import { PickingPass } from './view/picking';
@@ -255,13 +257,34 @@ const controlPanel = new ControlPanel(document.body, joint, view, {
 });
 refresh();
 
-// Populate the examples dropdown from the static manifest
-fetch('/examples/index.json')
-  .then((r) => (r.ok ? r.json() : []))
-  .then((names: string[]) => {
-    if (Array.isArray(names) && names.length > 0) controlPanel.setExamples(names);
-  })
-  .catch(() => {});
+// Populate the examples dropdown: fetch each example and evaluate it with
+// the ported engine so the dropdown groups valid vs invalid joints.
+async function loadExampleIndex(): Promise<void> {
+  const res = await fetch('/examples/index.json');
+  if (!res.ok) return;
+  const names: string[] = await res.json();
+  if (!Array.isArray(names) || names.length === 0) return;
+  const examples = await Promise.all(
+    names.map(async (name) => {
+      try {
+        const text = await (await fetch(`/examples/${name}`)).text();
+        const data = parseTsu(text);
+        const voxmat = matFromFields(data.heightFields, data.sax);
+        const ev = new Evaluation(voxmat, {
+          fixedSides: data.fixedSides,
+          sax: data.sax,
+          noc: data.fixedSides.length,
+          dim: data.dim,
+        });
+        return { name, valid: ev.valid };
+      } catch {
+        return { name, valid: false };
+      }
+    }),
+  );
+  controlPanel.setExamples(examples);
+}
+void loadExampleIndex();
 
 // Screen projection helpers for Selection (model rotation → screen plane)
 const projEuler = new THREE.Euler(0, 0, 0, 'XYZ');

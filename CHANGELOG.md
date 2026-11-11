@@ -5,7 +5,9 @@
 - `public/examples/` — all 17 `.tsu` joints shipped with tsugite-original
   (root + setup/), with a static `index.json` manifest.
 - Control panel gains an "Examples" dropdown that fetches and loads any of
-  them in place; the status bar reports validity on load.
+  them in place; the status bar reports validity on load. Each example is
+  evaluated with the ported engine at startup and the dropdown groups them
+  into "Valid joints (6)" / "Invalid joints (11)" optgroups.
 - Verified by loading every example through the UI: parameters (timbers,
   resolution, sliding axis, angle incl. ±70° A-joints) apply correctly and
   validity matches the original evaluation on all 17 (valid: 3_1, 3_2,

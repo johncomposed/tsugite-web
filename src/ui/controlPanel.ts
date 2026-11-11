@@ -86,7 +86,7 @@ export class ControlPanel {
   readonly element: HTMLDivElement;
   private cubeLock = true;
   private dimInputs: HTMLInputElement[] = [];
-  private examples: string[] = [];
+  private examples: { name: string; valid: boolean }[] = [];
 
   constructor(
     parent: HTMLElement,
@@ -106,9 +106,9 @@ export class ControlPanel {
     this.build();
   }
 
-  /** Provide the example-joint filenames (fetched async by the host). */
-  setExamples(names: string[]): void {
-    this.examples = names;
+  /** Provide the example joints (name + evaluated validity). */
+  setExamples(examples: { name: string; valid: boolean }[]): void {
+    this.examples = examples;
     this.rebuild();
   }
 
@@ -137,11 +137,22 @@ export class ControlPanel {
       placeholder.disabled = true;
       placeholder.selected = true;
       sel.appendChild(placeholder);
-      for (const name of this.examples) {
-        const o = document.createElement('option');
-        o.value = name;
-        o.textContent = name.replace(/\.tsu$/, '');
-        sel.appendChild(o);
+      const groups: [string, boolean][] = [
+        ['Valid joints', true],
+        ['Invalid joints', false],
+      ];
+      for (const [label, valid] of groups) {
+        const items = this.examples.filter((e) => e.valid === valid);
+        if (items.length === 0) continue;
+        const og = document.createElement('optgroup');
+        og.label = `${label} (${items.length})`;
+        for (const { name } of items) {
+          const o = document.createElement('option');
+          o.value = name;
+          o.textContent = name.replace(/\.tsu$/, '');
+          og.appendChild(o);
+        }
+        sel.appendChild(og);
       }
       sel.addEventListener('change', () => {
         if (sel.value) cb.loadExample(sel.value);
