@@ -1,5 +1,18 @@
 # Changelog
 
+## Post-port: example joints from the original repo (2026-11-10)
+
+- `public/examples/` — all 17 `.tsu` joints shipped with tsugite-original
+  (root + setup/), with a static `index.json` manifest.
+- Control panel gains an "Examples" dropdown that fetches and loads any of
+  them in place; the status bar reports validity on load.
+- Verified by loading every example through the UI: parameters (timbers,
+  resolution, sliding axis, angle incl. ±70° A-joints) apply correctly and
+  validity matches the original evaluation on all 17 (valid: 3_1, 3_2,
+  L_1, L_2, T_1, my_joint; the rest invalid, as in the Python fixtures).
+
+
+
 ## Post-port: perf HUD, zoom, faster rotation (2026-11-10)
 
 - `src/perf/perfMonitor.ts` — performance HUD (toggle `p`): FPS / avg / max

@@ -218,6 +218,32 @@ function saveFile(): void {
   statusMessage(`Saved ${fileBaseName}.tsu`);
 }
 
+async function loadExample(name: string): Promise<void> {
+  try {
+    const res = await fetch(`/examples/${name}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = parseTsu(await res.text());
+    joint.reset({
+      sax: data.sax,
+      dim: data.dim,
+      ang: data.ang,
+      realTimDims: data.realTimDims,
+      fixedSides: data.fixedSides,
+      heightFields: data.heightFields,
+      incremental: data.incremental,
+      fab: data.fab,
+    });
+    fileBaseName = name.replace(/\.tsu$/i, '');
+    refresh();
+    controlPanel.rebuild();
+    statusMessage(
+      `Loaded ${name} — ${joint.eval.valid ? 'valid joint' : 'INVALID joint (see feedback)'}`,
+    );
+  } catch (err) {
+    statusMessage(`Failed to load ${name}: ${String(err)}`);
+  }
+}
+
 const controlPanel = new ControlPanel(document.body, joint, view, {
   refresh,
   statusMessage,
@@ -225,8 +251,17 @@ const controlPanel = new ControlPanel(document.body, joint, view, {
   openFile,
   saveFile,
   exportFiles: downloadExports,
+  loadExample: (name) => void loadExample(name),
 });
 refresh();
+
+// Populate the examples dropdown from the static manifest
+fetch('/examples/index.json')
+  .then((r) => (r.ok ? r.json() : []))
+  .then((names: string[]) => {
+    if (Array.isArray(names) && names.length > 0) controlPanel.setExamples(names);
+  })
+  .catch(() => {});
 
 // Screen projection helpers for Selection (model rotation → screen plane)
 const projEuler = new THREE.Euler(0, 0, 0, 'XYZ');

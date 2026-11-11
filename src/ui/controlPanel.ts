@@ -13,6 +13,7 @@ export interface PanelCallbacks {
   openFile: () => void;
   saveFile: () => void;
   exportFiles: () => void;
+  loadExample: (name: string) => void;
 }
 
 function row(label: string, input: HTMLElement): HTMLDivElement {
@@ -85,6 +86,7 @@ export class ControlPanel {
   readonly element: HTMLDivElement;
   private cubeLock = true;
   private dimInputs: HTMLInputElement[] = [];
+  private examples: string[] = [];
 
   constructor(
     parent: HTMLElement,
@@ -104,6 +106,12 @@ export class ControlPanel {
     this.build();
   }
 
+  /** Provide the example-joint filenames (fetched async by the host). */
+  setExamples(names: string[]): void {
+    this.examples = names;
+    this.rebuild();
+  }
+
   private build(): void {
     const { joint, view, cb } = this;
 
@@ -118,6 +126,29 @@ export class ControlPanel {
     );
     file.appendChild(fileRow);
     this.element.appendChild(file);
+
+    // --- Examples (joints shipped with the original repo)
+    if (this.examples.length > 0) {
+      const ex = section('Examples');
+      const sel = document.createElement('select');
+      sel.className = 'cp-wide';
+      const placeholder = document.createElement('option');
+      placeholder.textContent = `Load example… (${this.examples.length})`;
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      sel.appendChild(placeholder);
+      for (const name of this.examples) {
+        const o = document.createElement('option');
+        o.value = name;
+        o.textContent = name.replace(/\.tsu$/, '');
+        sel.appendChild(o);
+      }
+      sel.addEventListener('change', () => {
+        if (sel.value) cb.loadExample(sel.value);
+      });
+      ex.appendChild(sel);
+      this.element.appendChild(ex);
+    }
 
     // --- Design
     const design = section('Design');
