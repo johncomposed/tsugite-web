@@ -47,7 +47,7 @@ function checkFixture(tsuName: string, expectedFiles: string[]): void {
   }
 }
 
-describe('fabrication parity vs original exports', () => {
+describe.skipIf(!existsSync(orig))('fabrication parity vs original exports', () => {
   it('my_joint.tsu → gcode matches my_joint_A/B.gcode', () => {
     checkFixture('my_joint.tsu', ['my_joint_A.gcode', 'my_joint_B.gcode']);
   });

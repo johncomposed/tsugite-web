@@ -51,7 +51,8 @@ function updateCamera(): void {
 }
 updateCamera();
 
-const endGrainTexture = new THREE.TextureLoader().load('/textures/end_grain.jpg');
+const BASE = import.meta.env.BASE_URL;
+const endGrainTexture = new THREE.TextureLoader().load(`${BASE}textures/end_grain.jpg`);
 endGrainTexture.wrapS = THREE.RepeatWrapping;
 endGrainTexture.wrapT = THREE.RepeatWrapping;
 endGrainTexture.colorSpace = THREE.SRGBColorSpace;
@@ -228,7 +229,7 @@ function saveFile(): void {
 
 async function loadExample(name: string): Promise<void> {
   try {
-    const res = await fetch(`/examples/${name}`);
+    const res = await fetch(`${BASE}examples/${name}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = parseTsu(await res.text());
     joint.reset({
@@ -314,14 +315,14 @@ refresh();
 // Populate the examples dropdown: fetch each example and evaluate it with
 // the ported engine so the dropdown groups valid vs invalid joints.
 async function loadExampleIndex(): Promise<void> {
-  const res = await fetch('/examples/index.json');
+  const res = await fetch(`${BASE}examples/index.json`);
   if (!res.ok) return;
   const names: string[] = await res.json();
   if (!Array.isArray(names) || names.length === 0) return;
   const examples = await Promise.all(
     names.map(async (name) => {
       try {
-        const text = await (await fetch(`/examples/${name}`)).text();
+        const text = await (await fetch(`${BASE}examples/${name}`)).text();
         const data = parseTsu(text);
         const voxmat = matFromFields(data.heightFields, data.sax);
         const ev = new Evaluation(voxmat, {

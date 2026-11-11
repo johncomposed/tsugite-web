@@ -1,5 +1,18 @@
 # Changelog
 
+## Post-port: GitHub Pages deployment (2026-11-10)
+
+- `vite.config.ts` with `base: './'` and `import.meta.env.BASE_URL`-prefixed
+  asset/example fetches, so the build works at any mount path (GitHub Pages
+  project sites included).
+- `.github/workflows/deploy.yml` — on push to main (or manual dispatch):
+  pnpm install, typecheck, tests, build, then deploy `dist/` to GitHub
+  Pages via the official actions. Parity tests that read ../tsugite-original
+  auto-skip in CI (`describe.skipIf`); all other tests run.
+- Verified the production build locally: relative assets, examples manifest,
+  textures, and workers all load from `vite preview`.
+
+
 ## Post-port: pruned gallery search (EvaluationOne port) (2026-11-10)
 
 Replaces the gallery's naive random sampling with the original's search

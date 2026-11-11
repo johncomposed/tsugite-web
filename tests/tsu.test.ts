@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { jointFromTsu, parseTsu, serializeTsu } from '../src/io/tsu';
@@ -8,7 +8,7 @@ import { Joint } from '../src/model/joint';
 
 const orig = join(__dirname, '..', '..', 'tsugite-original');
 
-describe('.tsu parsing', () => {
+describe.skipIf(!existsSync(orig))('.tsu parsing', () => {
   it('parses test_joint.tsu', () => {
     const data = parseTsu(readFileSync(join(orig, 'test_joint.tsu'), 'utf-8'));
     expect(data.dim).toBeGreaterThanOrEqual(2);

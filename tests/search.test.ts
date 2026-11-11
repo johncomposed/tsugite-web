@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { Evaluation } from '../src/model/evaluation';
@@ -70,7 +70,7 @@ describe('pruned joint search', () => {
     }
   });
 
-  it('finds valid joints for the 3_2 (3-timber) configuration', () => {
+  it.skipIf(!existsSync(join(orig, '3_2.tsu')))('finds valid joints for the 3_2 (3-timber) configuration', () => {
     // Random sampling found 0/3000 for this config; the pruned search must
     // succeed.
     const data = parseTsu(readFileSync(join(orig, '3_2.tsu'), 'utf-8'));
