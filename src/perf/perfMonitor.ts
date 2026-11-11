@@ -14,7 +14,8 @@ const FRAME_WINDOW = 90;
 
 export class PerfMonitor {
   readonly element: HTMLDivElement;
-  visible = true;
+  /** Shown by default in dev; hidden in production builds (toggle with `p`). */
+  visible = import.meta.env.DEV;
 
   private frameTimes: number[] = [];
   private lastFrameStart = 0;
@@ -25,6 +26,7 @@ export class PerfMonitor {
   constructor(parent: HTMLElement) {
     this.element = document.createElement('div');
     this.element.id = 'perf-hud';
+    this.element.style.display = this.visible ? '' : 'none';
     parent.appendChild(this.element);
   }
 
