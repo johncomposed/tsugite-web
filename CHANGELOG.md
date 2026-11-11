@@ -1,5 +1,17 @@
 # Changelog
 
+## Post-port: picking performance (2026-11-10)
+
+- Hover picking now runs only when the cursor moves or the scene moves
+  under it (rotation, open/close animation, zoom, geometry change) instead
+  of every frame — idle frames no longer pay the ~6 ms pick cost.
+- Pick render target downscaled to half resolution.
+- Pixel readback switched to `readRenderTargetPixelsAsync` with an
+  in-flight guard: the GPU pipeline is no longer stalled synchronously, so
+  worst-case frame time during cursor movement dropped from ~30 ms to
+  ~19 ms (hover resolves a frame later, imperceptibly).
+
+
 ## Post-port: hidden lines off by default + checkbox (2026-11-10)
 
 - Hidden-edge dashed lines now default to OFF, matching the paper UI's

@@ -122,6 +122,9 @@ export class PickingPass {
    * Render the pick pass and decode the pixel under (cssX, cssY).
    * Equivalent of Show.pick + the pixel-decode block in paintGL.
    */
+  /** Pick render scale (faces are large targets; half-res is plenty). */
+  scale = 0.5;
+
   pick(
     renderer: THREE.WebGLRenderer,
     scene: THREE.Scene,
@@ -130,7 +133,7 @@ export class PickingPass {
     cssY: number,
   ): PickResult | null {
     const size = renderer.getSize(new THREE.Vector2());
-    const pr = renderer.getPixelRatio();
+    const pr = renderer.getPixelRatio() * this.scale;
     const w = Math.max(1, Math.floor(size.x * pr));
     const h = Math.max(1, Math.floor(size.y * pr));
     if (this.target.width !== w || this.target.height !== h) this.target.setSize(w, h);
@@ -148,12 +151,53 @@ export class PickingPass {
     const px = Math.min(w - 1, Math.max(0, Math.floor(cssX * pr)));
     const py = Math.min(h - 1, Math.max(0, Math.floor((size.y - cssY) * pr)));
     renderer.readRenderTargetPixels(this.target, px, py, 1, 1, this.pixel);
-    const id = this.pixel[0] + (this.pixel[1] << 8);
+    return this.decode(this.pixel[0] + (this.pixel[1] << 8));
+  }
+
+  /**
+   * Async variant: renders the pick pass, then reads the pixel back without
+   * stalling the GPU pipeline (hover resolves a frame later).
+   */
+  async pickAsync(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.Camera,
+    cssX: number,
+    cssY: number,
+  ): Promise<PickResult | null> {
+    const size = renderer.getSize(new THREE.Vector2());
+    const pr = renderer.getPixelRatio() * this.scale;
+    const w = Math.max(1, Math.floor(size.x * pr));
+    const h = Math.max(1, Math.floor(size.y * pr));
+    if (this.target.width !== w || this.target.height !== h) this.target.setSize(w, h);
+
+    const prevBg = scene.background;
+    const prevMask = camera.layers.mask;
+    scene.background = new THREE.Color(0x000000);
+    camera.layers.set(PICK_LAYER);
+    renderer.setRenderTarget(this.target);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    camera.layers.mask = prevMask;
+    scene.background = prevBg;
+
+    const px = Math.min(w - 1, Math.max(0, Math.floor(cssX * pr)));
+    const py = Math.min(h - 1, Math.max(0, Math.floor((size.y - cssY) * pr)));
+    const buf = new Uint8Array(4);
+    await renderer.readRenderTargetPixelsAsync(this.target, px, py, 1, 1, buf);
+    return this.decode(buf[0] + (buf[1] << 8));
+  }
+
+  private decode(id: number): PickResult | null {
     if (id === 0) return null;
     if (id < TOP_BASE) {
       const n = id - 1;
       return { n, dir: null, x: null, y: null };
     }
+    return this.decodeTop(id);
+  }
+
+  private decodeTop(id: number): PickResult {
     const rest = id - TOP_BASE;
     const dim = this.dim;
     const nm = Math.floor(rest / (dim * dim));

@@ -61,6 +61,9 @@ const jointRenderer = new JointRenderer(endGrainTexture);
 const pickPass = new PickingPass();
 const overlays = new OverlayManager();
 const perf = new PerfMonitor(document.body);
+// Pick only when the cursor moved or the scene moved under it
+let pickDirty = true;
+let lastPickState = { xrot: NaN, yrot: NaN, openRatio: NaN, zoom: NaN };
 scene.add(jointRenderer.root);
 
 // --- Suggestions (worker, port of Types.update_suggestions)
@@ -112,6 +115,7 @@ function computeMillingPaths(): { display: Float32Array[]; mill: MillVertex[][] 
 }
 
 function refresh(): void {
+  pickDirty = true;
   perf.time('rebuild', () => jointRenderer.rebuild(joint, view));
   perf.time('pick build', () =>
     pickPass.build(joint, jointRenderer.componentGroups, jointRenderer.jvertsByAxis),
@@ -307,8 +311,9 @@ function canvasSize(): [number, number] {
   return [renderer.domElement.clientWidth, renderer.domElement.clientHeight];
 }
 
-function doPick(): void {
-  const res = perf.time('pick', () => pickPass.pick(renderer, scene, camera, mouse.x, mouse.y));
+let pickInFlight = false;
+
+function applyPick(res: ReturnType<typeof pickPass.pick>): void {
   select.suggState = -1;
   if (res && res.x !== null && res.y !== null && res.dir !== null) {
     const changed =
@@ -333,6 +338,21 @@ function doPick(): void {
   select.n = null;
 }
 
+function doPick(): void {
+  if (pickInFlight) return;
+  pickInFlight = true;
+  const t0 = performance.now();
+  pickPass
+    .pickAsync(renderer, scene, camera, mouse.x, mouse.y)
+    .then((res) => {
+      perf.record('pick (async)', performance.now() - t0);
+      applyPick(res);
+    })
+    .finally(() => {
+      pickInFlight = false;
+    });
+}
+
 renderer.domElement.addEventListener('mousedown', (e) => {
   if (e.button === 0) {
     const now = performance.now();
@@ -352,6 +372,7 @@ renderer.domElement.addEventListener('mousemove', (e) => {
   const rect = renderer.domElement.getBoundingClientRect();
   mouse.x = e.clientX - rect.left;
   mouse.y = e.clientY - rect.top;
+  pickDirty = true;
   view.updateRotation(e.clientX, e.clientY);
   const [w, h] = canvasSize();
   if (select.state === SelState.Pulling) select.edit([mouse.x, mouse.y], project, w, h);
@@ -467,8 +488,22 @@ renderer.setAnimationLoop(() => {
     camera.updateProjectionMatrix();
   }
   jointRenderer.updateTransforms(joint, view);
-  // Hover picking when not actively editing (original pick pass behavior)
-  if (select.state !== SelState.Pulling && select.state !== SelState.Moving) doPick();
+  // Hover picking when not actively editing — only when the cursor or the
+  // scene under it changed (the original picked every frame).
+  const sceneMoved =
+    view.xrot !== lastPickState.xrot ||
+    view.yrot !== lastPickState.yrot ||
+    view.openRatio !== lastPickState.openRatio ||
+    view.zoom !== lastPickState.zoom;
+  if (
+    (pickDirty || sceneMoved) &&
+    select.state !== SelState.Pulling &&
+    select.state !== SelState.Moving
+  ) {
+    doPick();
+    pickDirty = false;
+    lastPickState = { xrot: view.xrot, yrot: view.yrot, openRatio: view.openRatio, zoom: view.zoom };
+  }
   overlays.update(joint, select, jointRenderer.overlayGroups, jointRenderer.jvertsByAxis);
   renderer.render(scene, camera);
   perf.frame({
