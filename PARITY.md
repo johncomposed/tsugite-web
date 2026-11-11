@@ -41,8 +41,10 @@ version intentionally differs:
    the current view rotation) instead of live-rotating sub-viewports; they
    are re-rendered when suggestions change.
 
-7. **Gallery mode** (`search_results/` browsing) is not ported; the
-   suggestion provider interface leaves room for it.
+7. **Gallery mode** — the original browsed precomputed `search_results/`
+   .npy files (not shipped in the repo). The web version instead generates
+   valid joints on demand in a Web Worker (randomized search with the
+   ported evaluation), cached until the user explicitly regenerates.
 
 8. **Spindle warm-up** — SBP writer emits the same fixed header as the
    original (including `TR,18000`).

@@ -14,6 +14,7 @@ export interface PanelCallbacks {
   saveFile: () => void;
   exportFiles: () => void;
   loadExample: (name: string) => void;
+  openGallery: () => void;
 }
 
 function row(label: string, input: HTMLElement): HTMLDivElement {
@@ -273,6 +274,7 @@ export class ControlPanel {
         joint.clear();
         cb.refresh();
       }),
+      button('Gallery', cb.openGallery),
     );
     design.appendChild(designBtns);
     this.element.appendChild(design);

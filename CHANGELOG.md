@@ -1,5 +1,26 @@
 # Changelog
 
+## Post-port: gallery mode (2026-11-10)
+
+- `src/ui/galleryPanel.ts` + `src/workers/galleryWorker.ts` — full-screen
+  gallery of valid joints for the current configuration (sliding axis,
+  resolution, fixed sides). The original read precomputed search_results
+  .npy files (absent from the repo); we instead run a randomized search in
+  a Web Worker (target 20 joints, ≤3000 samples) using the ported
+  evaluation engine.
+- Results are cached with the config they were generated for: generation
+  happens ONLY on the Generate/Regenerate button. Gallery → pick a joint →
+  back to gallery shows the same results without recomputation; if the
+  setup changed since generation, the status line says so and offers
+  Regenerate.
+- Clicking a thumbnail loads that joint (restoring its sax/dim/fixed sides)
+  and closes the gallery. "Gallery" button lives in the Design section.
+- `src/ui/thumbRenderer.ts` — shared offscreen thumbnail renderer.
+
+Verified live: generate (20 valid / 59 sampled), pick loads a valid joint,
+reopening shows cached results unchanged.
+
+
 ## Post-port: picking performance (2026-11-10)
 
 - Hover picking now runs only when the cursor moves or the scene moves

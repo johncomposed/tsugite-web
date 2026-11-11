@@ -13,6 +13,8 @@ import type { MillVertex } from './fab/millVertex';
 import { ControlPanel } from './ui/controlPanel';
 import { parseTsu, serializeTsu } from './io/tsu';
 import { PerfMonitor } from './perf/perfMonitor';
+import { GalleryPanel, type GalleryConfig } from './ui/galleryPanel';
+import type { GalleryResponse } from './workers/galleryWorker';
 import { matFromFields } from './model/heightFields';
 import { Evaluation } from './model/evaluation';
 import { JointRenderer } from './view/jointRender';
@@ -250,6 +252,51 @@ async function loadExample(name: string): Promise<void> {
   }
 }
 
+// --- Gallery (results cached; regenerated only via the Generate button)
+const galleryPanel = new GalleryPanel(document.body);
+const galleryWorker = new Worker(new URL('./workers/galleryWorker.ts', import.meta.url), {
+  type: 'module',
+});
+let galleryRequestId = 0;
+let galleryRequestConfig: GalleryConfig | null = null;
+let galleryRequestSentAt = 0;
+galleryWorker.onmessage = (e: MessageEvent<GalleryResponse>) => {
+  if (e.data.id !== galleryRequestId || !galleryRequestConfig) return;
+  perf.record('gallery (worker)', performance.now() - galleryRequestSentAt);
+  galleryPanel.setResults(
+    joint,
+    galleryRequestConfig,
+    e.data.results,
+    e.data.attempts,
+    view.xrot,
+    view.yrot,
+  );
+};
+galleryPanel.onGenerate = (config) => {
+  galleryRequestId++;
+  galleryRequestConfig = config;
+  galleryRequestSentAt = performance.now();
+  galleryPanel.setGenerating();
+  galleryWorker.postMessage({
+    id: galleryRequestId,
+    dim: config.dim,
+    sax: config.sax,
+    fss: config.fss,
+    targetCount: 20,
+    maxAttempts: 3000,
+  });
+};
+galleryPanel.onPick = (pick) => {
+  joint.sax = pick.sax;
+  joint.dim = pick.dim;
+  joint.fixedSides = pick.fixedSides;
+  joint.heightFields = pick.hfs;
+  joint.recompute();
+  refresh();
+  controlPanel.rebuild();
+  statusMessage('Loaded joint from gallery');
+};
+
 const controlPanel = new ControlPanel(document.body, joint, view, {
   refresh,
   statusMessage,
@@ -258,6 +305,7 @@ const controlPanel = new ControlPanel(document.body, joint, view, {
   saveFile,
   exportFiles: downloadExports,
   loadExample: (name) => void loadExample(name),
+  openGallery: () => galleryPanel.open(joint),
 });
 refresh();
 
