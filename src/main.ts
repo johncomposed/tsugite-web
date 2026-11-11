@@ -3,7 +3,10 @@ import './style.css';
 
 import { Selection, SelState } from './interaction/selection';
 import { Joint } from './model/joint';
-import type { Vec3 } from './model/types';
+import { fixedSidesToString } from './model/fixedSides';
+import type { Mat2, Vec3 } from './model/types';
+import { SuggestionPanel } from './ui/suggestionPanel';
+import type { SuggestionResponse } from './workers/suggestionWorker';
 import { JointRenderer } from './view/jointRender';
 import { OverlayManager } from './view/overlays';
 import { PickingPass } from './view/picking';
@@ -51,9 +54,41 @@ const pickPass = new PickingPass();
 const overlays = new OverlayManager();
 scene.add(jointRenderer.root);
 
+// --- Suggestions (worker, port of Types.update_suggestions)
+const suggestionPanel = new SuggestionPanel(document.body);
+const suggestionWorker = new Worker(new URL('./workers/suggestionWorker.ts', import.meta.url), {
+  type: 'module',
+});
+let suggestionRequestId = 0;
+suggestionWorker.onmessage = (e: MessageEvent<SuggestionResponse>) => {
+  if (e.data.id !== suggestionRequestId) return; // stale
+  suggestionPanel.setSuggestions(joint, e.data.suggestions, view.xrot, view.yrot);
+};
+suggestionPanel.onPick = (hfs: Mat2[]) => {
+  joint.heightFields = hfs.map((hf) => hf.map((row) => row.slice()));
+  joint.recompute();
+  refresh();
+};
+
+function updateSuggestions(): void {
+  suggestionRequestId++;
+  if (joint.eval.valid || !view.showSuggestions) {
+    suggestionPanel.clear();
+    return;
+  }
+  suggestionWorker.postMessage({
+    id: suggestionRequestId,
+    dim: joint.dim,
+    sax: joint.sax,
+    fss: fixedSidesToString(joint.fixedSides),
+    hfs: joint.heightFields,
+  });
+}
+
 function refresh(): void {
   jointRenderer.rebuild(joint, view);
   pickPass.build(joint, jointRenderer.componentGroups, jointRenderer.jvertsByAxis);
+  updateSuggestions();
 }
 refresh();
 

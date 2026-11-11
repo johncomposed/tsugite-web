@@ -1,5 +1,26 @@
 # Changelog
 
+## Phase 5 — Suggestions panel (2026-11-10)
+
+### Added
+- `src/model/suggestions.ts` — port of `produce_suggestions`: try ±1 on
+  every height-field cell, keep up to 4 whose evaluation is valid. (The
+  original can overshoot 4 due to a break-placement bug; capped cleanly.)
+- `src/workers/suggestionWorker.ts` — suggestions computed in a Web Worker
+  (the original blocks the UI thread), stale responses dropped by id.
+- `src/ui/suggestionPanel.ts` — right-hand panel like the original's
+  suggestion viewports: thumbnails rendered with a shared offscreen
+  three.js renderer (white faces + black lines, current view rotation),
+  click to adopt a suggestion.
+- Wiring in `main.ts`: recomputed on every geometry change when the joint
+  is invalid (port of `update_suggestions`), cleared when valid.
+
+### Verified (live browser automation)
+Chessboard-invalid joint → worker returned a valid suggestion, thumbnail
+rendered; clicking it adopted the height fields and the joint became valid.
+
+
+
 ## Phase 4 — Evaluation feedback display (2026-11-10)
 
 Visual feedback for every evaluation result, matching Show.py's passes.
