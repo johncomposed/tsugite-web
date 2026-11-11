@@ -10,6 +10,8 @@ import type { SuggestionResponse } from './workers/suggestionWorker';
 import { buildMillContext, millingPathVertices } from './fab/millingPath';
 import { exportGcode } from './fab/gcode';
 import type { MillVertex } from './fab/millVertex';
+import { ControlPanel } from './ui/controlPanel';
+import { parseTsu, serializeTsu } from './io/tsu';
 import { JointRenderer } from './view/jointRender';
 import { OverlayManager } from './view/overlays';
 import { PickingPass } from './view/picking';
@@ -107,20 +109,114 @@ function refresh(): void {
     jointRenderer.addMillingPaths(joint, computeMillingPaths().display);
   }
   updateSuggestions();
+  updateValidity();
 }
-refresh();
 
 function downloadExports(): void {
   const { mill } = computeMillingPaths();
-  for (const file of exportGcode(joint, mill, 'joint')) {
-    const blob = new Blob([file.content], { type: 'text/plain' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = file.name;
-    a.click();
-    URL.revokeObjectURL(a.href);
+  for (const file of exportGcode(joint, mill, fileBaseName)) {
+    downloadBlob(file.name, file.content);
   }
+  statusMessage(`Exported ${joint.noc} ${joint.fab.ext} file(s)`);
 }
+
+function downloadBlob(name: string, content: string): void {
+  const blob = new Blob([content], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// --- Status bar
+const statusBar = document.createElement('div');
+statusBar.id = 'status-bar';
+const statusText = document.createElement('span');
+statusText.textContent =
+  "Open/close the joint by double-clicking. Pull faces to edit. Right-drag rotates.";
+const validityText = document.createElement('span');
+statusBar.append(statusText, validityText);
+document.body.appendChild(statusBar);
+
+let statusTimer = 0;
+function statusMessage(msg: string): void {
+  statusText.textContent = msg;
+  window.clearTimeout(statusTimer);
+  statusTimer = window.setTimeout(() => {
+    statusText.textContent =
+      "Open/close the joint by double-clicking. Pull faces to edit. Right-drag rotates.";
+  }, 4000);
+}
+
+function updateValidity(): void {
+  if (joint.eval.valid) {
+    validityText.textContent = 'VALID JOINT';
+    validityText.className = 'valid';
+    return;
+  }
+  const issues: string[] = [];
+  if (!joint.eval.interlock) issues.push('not interlocking');
+  if (!joint.eval.connected.every(Boolean)) issues.push('unconnected voxels');
+  if (!joint.eval.bridged.every(Boolean)) issues.push('unbridged');
+  if (joint.eval.checker.some(Boolean)) issues.push('checkerboard');
+  if (joint.eval.breakable.some(Boolean)) issues.push('fragile grain');
+  if (!joint.eval.fabDirectionOk.every(Boolean)) issues.push('unfabricatable');
+  validityText.textContent = `INVALID: ${issues.join(', ')}`;
+  validityText.className = 'invalid';
+}
+
+// --- File handling
+let fileBaseName = 'Untitled';
+
+function newFile(): void {
+  joint.reset();
+  fileBaseName = 'Untitled';
+  refresh();
+  controlPanel.rebuild();
+  statusMessage('New joint');
+}
+
+function openFile(): void {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.tsu';
+  input.addEventListener('change', async () => {
+    const f = input.files?.[0];
+    if (!f) return;
+    const data = parseTsu(await f.text());
+    joint.reset({
+      sax: data.sax,
+      dim: data.dim,
+      ang: data.ang,
+      realTimDims: data.realTimDims,
+      fixedSides: data.fixedSides,
+      heightFields: data.heightFields,
+      incremental: data.incremental,
+      fab: data.fab,
+    });
+    fileBaseName = f.name.replace(/\.tsu$/i, '');
+    refresh();
+    controlPanel.rebuild();
+    statusMessage(`Opened ${f.name}`);
+  });
+  input.click();
+}
+
+function saveFile(): void {
+  downloadBlob(`${fileBaseName}.tsu`, serializeTsu(joint));
+  statusMessage(`Saved ${fileBaseName}.tsu`);
+}
+
+const controlPanel = new ControlPanel(document.body, joint, view, {
+  refresh,
+  statusMessage,
+  newFile,
+  openFile,
+  saveFile,
+  exportFiles: downloadExports,
+});
+refresh();
 
 // Screen projection helpers for Selection (model rotation → screen plane)
 const projEuler = new THREE.Euler(0, 0, 0, 'XYZ');

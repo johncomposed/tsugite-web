@@ -1,5 +1,32 @@
 # Changelog
 
+## Phase 7 — UI chrome & polish (2026-11-10)
+
+### Added
+- `src/ui/controlPanel.ts` — left panel replicating Tsugite.ui:
+  - File: New / Open (`.tsu` file input) / Save (download).
+  - Design: open/close button, feedback toggle, sliding axis (with
+    blocked-direction status message), number of timbers (2–6), resolution
+    (2–5), intersection angle, timber X/Y/Z dims with "all same" cube lock,
+    randomize/clear.
+  - Fabrication: bit diameter, tolerance, speed, spindle speed, alignment
+    axis, incremental + arc-interpolation toggles, gcode/nc/sbp format,
+    milling-path toggle, export button.
+- Status bar: interaction hints, transient status messages, and live
+  validity readout (VALID JOINT / list of failed criteria).
+- `Joint.reset()` (port of Types.reset) powering New/Open in place.
+- `README.md` (usage, structure, commands) and `PARITY.md` (documented
+  divergences: unreplicated original bugs, hidden-line approximation,
+  picking scheme, libm epsilon handling, thumbnail rendering, no gallery).
+
+### Verified (live browser automation)
+Panel renders with all 25 controls; resolution change 3→4 regenerates
+height fields; sliding-axis change applies with blocked check; New resets
+to defaults; validity readout tracks evaluation. Full suite: 144 tests,
+typecheck, production build all green.
+
+
+
 ## Phase 6 — Fabrication (2026-11-10)
 
 Milling path generation and G-code/SBP/NC export with parity against the

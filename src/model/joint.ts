@@ -135,6 +135,22 @@ export class Joint {
     this.fabDirections = this.eval.fabDirections;
   }
 
+  /** Port of Types.reset — reinitialize in place (used by New/Open). */
+  reset(options: JointOptions = {}): void {
+    this.sax = options.sax ?? 2;
+    this.dim = options.dim ?? 3;
+    this.ang = options.ang ?? 0.0;
+    this.realTimDims = options.realTimDims ?? [44.0, 44.0, 44.0];
+    this.fixedSides = options.fixedSides ?? defaultFixedSides();
+    this.incremental = options.incremental ?? false;
+    this.fab = { ...DEFAULT_FAB, ...options.fab };
+    this.heightFields =
+      options.heightFields && options.heightFields.length > 0
+        ? options.heightFields
+        : randomHeightFields(this.dim, this.noc);
+    this.recompute();
+  }
+
   /** Port of Types.update_sliding_direction. */
   updateSlidingDirection(sax: Axis): { ok: boolean; msg: string } {
     for (let i = 0; i < this.fixedSides.length; i++) {
