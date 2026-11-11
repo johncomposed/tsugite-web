@@ -88,7 +88,8 @@ function disposeGroup(group: THREE.Group): void {
 
 export class JointRenderer {
   readonly root = new THREE.Group();
-  private componentGroups: THREE.Group[] = [];
+  componentGroups: THREE.Group[] = [];
+  overlayGroups: THREE.Group[] = [];
   private openLineGroups: THREE.LineSegments[] = [];
   /** Per-component vertex copies (by that component's first fixed axis). */
   jvertsByAxis: Float32Array[] = [];
@@ -139,6 +140,7 @@ export class JointRenderer {
     for (const g of this.componentGroups) disposeGroup(g);
     this.root.clear();
     this.componentGroups = [];
+    this.overlayGroups = [];
     this.openLineGroups = [];
 
     this.jvertsByAxis = [0, 1, 2].map((ax) => createJointVertices(joint, ax as Axis));
@@ -208,6 +210,10 @@ export class JointRenderer {
       openLines.visible = false;
       group.add(openLines);
       this.openLineGroups.push(openLines);
+
+      const overlay = new THREE.Group();
+      group.add(overlay);
+      this.overlayGroups.push(overlay);
 
       this.componentGroups.push(group);
       this.root.add(group);

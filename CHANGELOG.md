@@ -1,5 +1,42 @@
 # Changelog
 
+## Phase 3 — Interaction (2026-11-10)
+
+Push/pull face editing, component move/rotate, GPU picking — the editing
+model of the original app.
+
+### Added
+- `src/interaction/selection.ts` — port of `Selection.py`: state machine
+  (idle / face hovered / pulling / body hovered / moving), `update_pick`
+  with Shift same-height flood select, `start_pull`/`edit`/`end_pull`
+  (mouse drag projected onto the screen-space sliding axis → integer height
+  delta, clamped), `start_move`/`move`/`end_move` (drag angle vs projected
+  component axis chooses rotate vs move; L↔T transitions; blocked-direction
+  checks against unblocked positions).
+- `src/view/picking.ts` — GPU color picking (equivalent of `Show.pick`):
+  pick meshes on a separate three.js layer inside the same component groups
+  (inherit open/rotate transforms), unique flat color per top-face cell
+  `(n, side, i, j)` + per-component body color, offscreen render target +
+  single-pixel readback, id→selection decode.
+- `src/view/overlays.ts` — hovered/selected face highlight (dark grey),
+  pull preview (dashed outlines stepped along the sliding axis, as the
+  original's stippled outlines), move/rotate preview (dashed component
+  outline at the proposed position).
+- `src/main.ts` — full mouse wiring: hover picking each frame while idle,
+  left-press starts pull (face) or move (body), drag edits, release commits
+  and rebuilds; Shift multi-select; double-click/space open-close.
+
+### Verified (live browser automation)
+- Picking: background → null, bodies → component id, exposed top faces →
+  correct `(n, dir, x, y)`; closed joints expose no top faces (matches the
+  original's open-to-edit workflow).
+- Full pull edit: pick face (0,2) of component 0, drag 2 steps → height
+  field 0→2, evaluation re-ran, geometry rebuilt.
+- Move/rotate: horizontal drag on a z-fixed component proposes x-axis
+  rotation with correct blocked-side handling.
+
+
+
 ## Phase 2 — Rendering parity (2026-11-10)
 
 three.js rendering that reproduces the original's look: white faces, black
