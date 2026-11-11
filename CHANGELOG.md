@@ -1,5 +1,35 @@
 # Changelog
 
+## Post-port: pruned gallery search (EvaluationOne port) (2026-11-10)
+
+Replaces the gallery's naive random sampling with the original's search
+machinery, ported from Evaluation.py's search-mode classes:
+
+- `src/model/evaluation.ts` gains `getSlidingDirectionsOfOneTimber`,
+  `floodAllNonneg`, and `isPotentiallyConnected` (the EvaluationOne /
+  branch-and-bound pruning tests the original used to precompute its
+  search_results catalog offline).
+- `src/model/search.ts` — pruned DFS over height-field cells: monotonic
+  bounds between fields, sound local chessboard pruning, EvaluationOne-style
+  partial checks when a non-final field completes (connectivity, potential
+  connectivity/bridging of the remainder, one-timber slidability,
+  fragility), `quickValid` leaf check (early-exit reimplementation of
+  Evaluation.valid, verified to agree on all fixtures + random fields).
+  Randomized-restart probes (300-leaf budget each) spread the eval budget
+  across the space; the first probe is anchored to the current design and
+  later probes to random anchors (values ordered by closeness to the
+  anchor); per-probe result caps keep the gallery varied. A probe that
+  covers the whole pruned space marks the search exhaustive.
+- Gallery status now reports "complete search" vs "pruned search" with the
+  number of candidates evaluated.
+
+Fixes the reported case: example 3_2 (3 timbers) produced 0/3000 valid with
+random sampling; the pruned search now finds valid 3-timber joints in
+~0.6 s (and the default 2-timber setup fills 20 results in ~0.15 s).
+Resolution-2 note: brute force confirms there are NO valid 2-component
+dim-2 joints, and the search proves it with a complete enumeration.
+
+
 ## Post-port: gallery mode (2026-11-10)
 
 - `src/ui/galleryPanel.ts` + `src/workers/galleryWorker.ts` — full-screen

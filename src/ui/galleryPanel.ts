@@ -40,7 +40,8 @@ export class GalleryPanel {
   /** Cached results + the config they were generated for. */
   private results: Mat2[][] = [];
   private resultConfig: GalleryConfig | null = null;
-  private attempts = 0;
+  private examined = 0;
+  private exhausted = false;
   private generating = false;
 
   constructor(parent: HTMLElement) {
@@ -112,7 +113,8 @@ export class GalleryPanel {
     joint: Joint,
     config: GalleryConfig,
     results: Mat2[][],
-    attempts: number,
+    examined: number,
+    exhausted: boolean,
     xrot: number,
     yrot: number,
   ): void {
@@ -121,7 +123,8 @@ export class GalleryPanel {
     this.generateBtn.disabled = false;
     this.results = results;
     this.resultConfig = config;
-    this.attempts = attempts;
+    this.examined = examined;
+    this.exhausted = exhausted;
     this.renderRot = [xrot, yrot];
     // Dedicated render joint pinned to the generated config, so toggling the
     // open view later stays correct even if the main joint changed.
@@ -185,7 +188,9 @@ export class GalleryPanel {
       this.pendingConfig.sax === this.resultConfig.sax &&
       this.pendingConfig.dim === this.resultConfig.dim &&
       this.pendingConfig.fss === this.resultConfig.fss;
-    const base = `${this.results.length} valid joints (${this.attempts} sampled)`;
+    const base = this.exhausted
+      ? `${this.results.length} valid joints — complete search (${this.examined} candidates evaluated)`
+      : `${this.results.length} valid joints (pruned search, ${this.examined} candidates evaluated)`;
     this.statusEl.textContent = sameConfig
       ? base
       : `${base} — generated for a different setup; Regenerate for the current one.`;

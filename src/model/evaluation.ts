@@ -253,6 +253,156 @@ export function getSlidingDirections(mat: Mat3, noc: number): [Slide[][], number
   return [slidingDirections, numberOfSlidingDirections];
 }
 
+/** Port of get_sliding_directions_of_one_timber. */
+export function getSlidingDirectionsOfOneTimber(mat: Mat3, level: number): [Slide[], number] {
+  const slidingDirections: Slide[] = [];
+  const dims = shape3(mat);
+  for (let ax = 0 as Axis; ax < 3; ax++) {
+    const oax = [0, 1, 2].filter((a) => a !== ax);
+    for (let dir = 0; dir < 2; dir++) {
+      let slides = true;
+      outer: for (let i = 0; i < dims[oax[0] as Axis]; i++) {
+        for (let j = 0; j < dims[oax[1] as Axis]; j++) {
+          let firstSame = false;
+          for (let k0 = 0; k0 < dims[ax]; k0++) {
+            const k = dir === 0 ? dims[ax] - k0 - 1 : k0;
+            const [x, y, z] = insertAxis([i, j], ax as Axis, k);
+            const val = mat[x][y][z];
+            if (val === level) {
+              firstSame = true;
+              continue;
+            }
+            if (firstSame && val !== -1) {
+              slides = false;
+              break outer;
+            }
+          }
+        }
+      }
+      if (slides) slidingDirections.push([ax, dir]);
+    }
+  }
+  return [slidingDirections, slidingDirections.length];
+}
+
+/** Port of flood_all_nonneg (iterative). */
+export function floodAllNonneg(mat: Mat3, floodval: number): void {
+  const dims = shape3(mat);
+  const queue: Vec3[] = [];
+  for (let i = 0; i < dims[0]; i++)
+    for (let j = 0; j < dims[1]; j++)
+      for (let k = 0; k < dims[2]; k++) {
+        if (mat[i][j][k] === floodval) queue.push([i, j, k]);
+      }
+  while (queue.length > 0) {
+    const ind = queue.pop()!;
+    for (let ax = 0; ax < 3; ax++) {
+      for (let dir = -1; dir < 2; dir += 2) {
+        const ind2: Vec3 = [...ind];
+        ind2[ax] += dir;
+        if (ind2[ax] < 0 || ind2[ax] >= dims[ax]) continue;
+        const val = mat[ind2[0]][ind2[1]][ind2[2]];
+        if (val < 0 || val === floodval) continue;
+        mat[ind2[0]][ind2[1]][ind2[2]] = floodval;
+        queue.push(ind2);
+      }
+    }
+  }
+}
+
+/**
+ * Port of is_potentially_connected: given a partial voxel matrix with fixed
+ * sides added with offset 10 (pads = n+10), can the remaining (lumped)
+ * material still connect and bridge all other components?
+ */
+export function isPotentiallyConnected(
+  matIn: Mat3,
+  dim: number,
+  noc: number,
+  level: number,
+): boolean {
+  const mat = copyMat3(matIn);
+  const dims = shape3(mat);
+  for (let i = 0; i < dims[0]; i++)
+    for (let j = 0; j < dims[1]; j++)
+      for (let k = 0; k < dims[2]; k++) {
+        if (mat[i][j][k] === level || mat[i][j][k] === level + 10) mat[i][j][k] = -1;
+      }
+
+  const floodval = 99;
+  // 1. Connectivity: flood from all other components' pads at once
+  const matConn = copyMat3(mat);
+  for (let n = 0; n < noc; n++) {
+    if (n === level) continue;
+    for (let i = 0; i < dims[0]; i++)
+      for (let j = 0; j < dims[1]; j++)
+        for (let k = 0; k < dims[2]; k++) {
+          if (matConn[i][j][k] === n + 10) matConn[i][j][k] = floodval;
+        }
+  }
+  floodAllNonneg(matConn, floodval);
+  for (let i = 0; i < dims[0]; i++)
+    for (let j = 0; j < dims[1]; j++)
+      for (let k = 0; k < dims[2]; k++) {
+        if (matConn[i][j][k] !== floodval && matConn[i][j][k] >= 0) return false;
+      }
+
+  // 2. At least some (3) voxels could connect to each fixed side
+  for (let n = 0; n < noc; n++) {
+    if (n === level) continue;
+    const mc = copyMat3(mat);
+    let startLen = 0;
+    for (let i = 0; i < dims[0]; i++)
+      for (let j = 0; j < dims[1]; j++)
+        for (let k = 0; k < dims[2]; k++) {
+          if (mc[i][j][k] === n + 10) {
+            mc[i][j][k] = floodval;
+            startLen++;
+          } else {
+            for (let n2 = 0; n2 < noc; n2++) {
+              if (n2 === level || n2 === n) continue;
+              if (mc[i][j][k] === n2 + 10) mc[i][j][k] = -1;
+            }
+          }
+        }
+    floodAllNonneg(mc, floodval);
+    let endLen = 0;
+    for (let i = 0; i < dims[0]; i++)
+      for (let j = 0; j < dims[1]; j++)
+        for (let k = 0; k < dims[2]; k++) {
+          if (mc[i][j][k] === floodval) endLen++;
+        }
+    if (endLen - startLen < 3) return false;
+  }
+
+  // 3. Potential bridging (components with more than one fixed side)
+  for (let n = 0; n < noc; n++) {
+    if (n === level) continue;
+    const padInds: Vec3[] = [];
+    for (let i = 0; i < dims[0]; i++)
+      for (let j = 0; j < dims[1]; j++)
+        for (let k = 0; k < dims[2]; k++) {
+          if (mat[i][j][k] === n + 10) padInds.push([i, j, k]);
+        }
+    if (padInds.length <= dim * dim * dim) continue; // original heuristic
+    const mc = copyMat3(mat);
+    mc[padInds[0][0]][padInds[0][1]][padInds[0][2]] = floodval;
+    for (let n2 = 0; n2 < noc; n2++) {
+      if (n2 === level || n2 === n) continue;
+      for (let i = 0; i < dims[0]; i++)
+        for (let j = 0; j < dims[1]; j++)
+          for (let k = 0; k < dims[2]; k++) {
+            if (mc[i][j][k] === n2 + 10) mc[i][j][k] = -1;
+          }
+    }
+    floodAllNonneg(mc, floodval);
+    for (const ind of padInds) {
+      if (mc[ind[0]][ind[1]][ind[2]] !== floodval) return false;
+    }
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Friction / contact
 

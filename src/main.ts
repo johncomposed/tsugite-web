@@ -267,7 +267,8 @@ galleryWorker.onmessage = (e: MessageEvent<GalleryResponse>) => {
     joint,
     galleryRequestConfig,
     e.data.results,
-    e.data.attempts,
+    e.data.examined,
+    e.data.exhausted,
     view.xrot,
     view.yrot,
   );
@@ -283,7 +284,8 @@ galleryPanel.onGenerate = (config) => {
     sax: config.sax,
     fss: config.fss,
     targetCount: 20,
-    maxAttempts: 3000,
+    maxLeafEvals: 25000,
+    seedFields: joint.heightFields.map((f) => f.map((r) => r.slice())),
   });
 };
 galleryPanel.onPick = (pick) => {
