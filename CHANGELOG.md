@@ -1,5 +1,22 @@
 # Changelog
 
+## Post-port: perf HUD, zoom, faster rotation (2026-11-10)
+
+- `src/perf/perfMonitor.ts` — performance HUD (toggle `p`): FPS / avg / max
+  frame time over a 90-frame window, three.js draw calls + triangle/line
+  counts, and named timings (last + running avg) for geometry rebuild, pick
+  mesh build, per-frame GPU pick, milling path generation, and suggestion
+  worker round-trip.
+- Zoom: mouse wheel and trackpad pinch (ctrl+wheel) zoom the orthographic
+  camera (`view.zoom`, clamped 0.2–8), plus two-finger touch pinch.
+- Right-drag rotation speed raised 3× (`rotSpeed` 0.001 → 0.003,
+  configurable in ViewSettings).
+
+Measured on the default dim-3 joint: 60 fps / 16.7 ms frames, rebuild
+4.5 ms, pick build 0.6 ms, pick pass 6.5 ms, suggestions ~250 ms in worker.
+
+
+
 ## Phase 7 — UI chrome & polish (2026-11-10)
 
 ### Added

@@ -12,6 +12,7 @@ import { exportGcode } from './fab/gcode';
 import type { MillVertex } from './fab/millVertex';
 import { ControlPanel } from './ui/controlPanel';
 import { parseTsu, serializeTsu } from './io/tsu';
+import { PerfMonitor } from './perf/perfMonitor';
 import { JointRenderer } from './view/jointRender';
 import { OverlayManager } from './view/overlays';
 import { PickingPass } from './view/picking';
@@ -57,6 +58,7 @@ const select = new Selection(joint);
 const jointRenderer = new JointRenderer(endGrainTexture);
 const pickPass = new PickingPass();
 const overlays = new OverlayManager();
+const perf = new PerfMonitor(document.body);
 scene.add(jointRenderer.root);
 
 // --- Suggestions (worker, port of Types.update_suggestions)
@@ -65,8 +67,12 @@ const suggestionWorker = new Worker(new URL('./workers/suggestionWorker.ts', imp
   type: 'module',
 });
 let suggestionRequestId = 0;
+const suggestionSentAt = new Map<number, number>();
 suggestionWorker.onmessage = (e: MessageEvent<SuggestionResponse>) => {
+  const sent = suggestionSentAt.get(e.data.id);
+  suggestionSentAt.delete(e.data.id);
   if (e.data.id !== suggestionRequestId) return; // stale
+  if (sent !== undefined) perf.record('suggestions (worker)', performance.now() - sent);
   suggestionPanel.setSuggestions(joint, e.data.suggestions, view.xrot, view.yrot);
 };
 suggestionPanel.onPick = (hfs: Mat2[]) => {
@@ -81,6 +87,7 @@ function updateSuggestions(): void {
     suggestionPanel.clear();
     return;
   }
+  suggestionSentAt.set(suggestionRequestId, performance.now());
   suggestionWorker.postMessage({
     id: suggestionRequestId,
     dim: joint.dim,
@@ -103,10 +110,13 @@ function computeMillingPaths(): { display: Float32Array[]; mill: MillVertex[][] 
 }
 
 function refresh(): void {
-  jointRenderer.rebuild(joint, view);
-  pickPass.build(joint, jointRenderer.componentGroups, jointRenderer.jvertsByAxis);
+  perf.time('rebuild', () => jointRenderer.rebuild(joint, view));
+  perf.time('pick build', () =>
+    pickPass.build(joint, jointRenderer.componentGroups, jointRenderer.jvertsByAxis),
+  );
   if (view.showMillingPath) {
-    jointRenderer.addMillingPaths(joint, computeMillingPaths().display);
+    const display = perf.time('milling path', () => computeMillingPaths().display);
+    jointRenderer.addMillingPaths(joint, display);
   }
   updateSuggestions();
   updateValidity();
@@ -240,7 +250,7 @@ function canvasSize(): [number, number] {
 }
 
 function doPick(): void {
-  const res = pickPass.pick(renderer, scene, camera, mouse.x, mouse.y);
+  const res = perf.time('pick', () => pickPass.pick(renderer, scene, camera, mouse.x, mouse.y));
   select.suggState = -1;
   if (res && res.x !== null && res.y !== null && res.dir !== null) {
     const changed =
@@ -303,6 +313,48 @@ window.addEventListener('mouseup', (e) => {
 });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
+// --- Zoom: mouse wheel and trackpad pinch (ctrl+wheel), touch pinch
+renderer.domElement.addEventListener(
+  'wheel',
+  (e) => {
+    e.preventDefault();
+    const sensitivity = e.ctrlKey ? 0.01 : 0.0015; // pinch gestures send ctrlKey
+    view.applyZoom(Math.exp(-e.deltaY * sensitivity));
+  },
+  { passive: false },
+);
+
+let pinchDist: number | null = null;
+renderer.domElement.addEventListener(
+  'touchstart',
+  (e) => {
+    if (e.touches.length === 2) {
+      pinchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY,
+      );
+    }
+  },
+  { passive: true },
+);
+renderer.domElement.addEventListener(
+  'touchmove',
+  (e) => {
+    if (e.touches.length !== 2 || pinchDist === null) return;
+    e.preventDefault();
+    const dist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY,
+    );
+    if (pinchDist > 0) view.applyZoom(dist / pinchDist);
+    pinchDist = dist;
+  },
+  { passive: false },
+);
+renderer.domElement.addEventListener('touchend', () => {
+  pinchDist = null;
+});
+
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Shift') {
     select.shift = true;
@@ -337,6 +389,9 @@ window.addEventListener('keydown', (e) => {
     case 'g':
       downloadExports();
       return;
+    case 'p':
+      perf.toggle();
+      return;
   }
 });
 window.addEventListener('keyup', (e) => {
@@ -349,11 +404,20 @@ window.addEventListener('keyup', (e) => {
 window.addEventListener('resize', updateCamera);
 
 renderer.setAnimationLoop(() => {
+  if (camera.zoom !== view.zoom) {
+    camera.zoom = view.zoom;
+    camera.updateProjectionMatrix();
+  }
   jointRenderer.updateTransforms(joint, view);
   // Hover picking when not actively editing (original pick pass behavior)
   if (select.state !== SelState.Pulling && select.state !== SelState.Moving) doPick();
   overlays.update(joint, select, jointRenderer.overlayGroups, jointRenderer.jvertsByAxis);
   renderer.render(scene, camera);
+  perf.frame({
+    calls: renderer.info.render.calls,
+    triangles: renderer.info.render.triangles,
+    lines: renderer.info.render.lines,
+  });
 });
 
 // Dev/debug hook (also used by automated visual checks)

@@ -95,6 +95,22 @@ canvas {
   color: #080;
 }
 
+#perf-hud {
+  position: fixed;
+  top: 6px;
+  right: 212px;
+  padding: 6px 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #eee;
+  background: rgba(20, 20, 20, 0.75);
+  border-radius: 4px;
+  z-index: 20;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 #suggestions {
   position: fixed;
   top: 0;

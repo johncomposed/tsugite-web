@@ -16,9 +16,12 @@ export class ViewSettings {
   private closeStartDist = 0;
   openRatio = 0;
 
-  // Mouse rotation
+  // Mouse rotation / zoom
   xrot = 0.8;
   yrot = 0.4;
+  /** Rotation speed (the original used 0.001; raised for snappier feel). */
+  rotSpeed = 0.003;
+  zoom = 1;
   private xrot0 = this.xrot;
   private yrot0 = this.yrot;
   private xstart = 0;
@@ -69,9 +72,13 @@ export class ViewSettings {
 
   updateRotation(x: number, y: number): void {
     if (!this.dragged) return;
-    const ratio = 0.001;
-    this.xrot = this.xrot0 + ratio * (y - this.ystart);
-    this.yrot = this.yrot0 + ratio * (x - this.xstart);
+    this.xrot = this.xrot0 + this.rotSpeed * (y - this.ystart);
+    this.yrot = this.yrot0 + this.rotSpeed * (x - this.xstart);
+  }
+
+  /** Multiply zoom by a factor, clamped. */
+  applyZoom(factor: number): void {
+    this.zoom = Math.min(8, Math.max(0.2, this.zoom * factor));
   }
 
   endRotation(): void {
