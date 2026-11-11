@@ -1,5 +1,7 @@
 # Tsugite Web
 
+![Tsugite Web](tsugite-web.png)
+
 Web reimplementation of [Tsugite](https://github.com/marialarsson/tsugite)
 (UIST 2020) — interactive design and fabrication of wood joints — in
 TypeScript + Vite + three.js. The original Python/PyQt5/OpenGL app is ported
