@@ -1,5 +1,12 @@
 # Changelog
 
+## Post-port: hidden lines off by default + checkbox (2026-11-10)
+
+- Hidden-edge dashed lines now default to OFF, matching the paper UI's
+  look, with a "Hidden lines" checkbox in the Design section (the `h` key
+  still toggles).
+
+
 ## Post-port: example joints from the original repo (2026-11-10)
 
 - `public/examples/` — all 17 `.tsu` joints shipped with tsugite-original

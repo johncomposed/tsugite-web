@@ -182,6 +182,15 @@ export class ControlPanel {
     );
     design.appendChild(
       row(
+        'Hidden lines',
+        checkbox(view.showHiddenLines, (v) => {
+          view.showHiddenLines = v;
+          cb.refresh();
+        }),
+      ),
+    );
+    design.appendChild(
+      row(
         'Sliding axis',
         select(['X', 'Y', 'Z'], joint.sax, (i) => {
           const res = joint.updateSlidingDirection(i as Axis);

@@ -3,7 +3,7 @@
 export class ViewSettings {
   // Visibility
   hidden = [false, false, false, false, false, false];
-  showHiddenLines = true;
+  showHiddenLines = false;
   showFeedback = true;
   showMillingPath = false;
   showSuggestions = true;
